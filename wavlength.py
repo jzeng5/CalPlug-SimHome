@@ -39,6 +39,7 @@ def outputToFile() -> bool:
             print("Invalid command! Please enter again...")
 
 def output_length(path: str, length: float) -> None:
+    '''Outputs the duration of wave file into same directory as wav file'''
     with open(path, 'w') as file:
         file.write(str(length))
             
@@ -80,6 +81,7 @@ def get_wav_length() -> None:
     print("Exiting wavlength.py script...")
 
 def main() -> None:
+    '''Runs the script to get duration of wav file'''
     get_wav_length()
 
 if __name__ == '__main__':
