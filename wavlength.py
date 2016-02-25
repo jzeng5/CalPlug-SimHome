@@ -1,3 +1,7 @@
+""" Created by Christian Morte. 2-25-2015.
+    iOS Development Team - SIMHome - CalPlug
+"""
+
 import os.path
 import contextlib
 import wave
@@ -86,4 +90,3 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
-kenmorte
