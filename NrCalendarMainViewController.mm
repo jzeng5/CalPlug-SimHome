@@ -36,18 +36,18 @@ BOOL pendingNotification = NO;
 BOOL started;
 int counter;
 /*
-- (void)increaseTimerCount
-{
-    self.TimerButton.text = [NSString stringWithFormat:@"%d", counter];
-    
-    if (started) {
-        counter ++;
-    }
-    
-    NaradaDownloader *downloader = [[NaradaDownloader alloc] initWithURLString:@"http://128.195.185.104:8080/musicglove/resources/saves/temp/RIVA_log.txt" andDelegate:self];
-    [downloader requestDownload];
-}
-*/
+ - (void)increaseTimerCount
+ {
+ self.TimerButton.text = [NSString stringWithFormat:@"%d", counter];
+ 
+ if (started) {
+ counter ++;
+ }
+ 
+ NaradaDownloader *downloader = [[NaradaDownloader alloc] initWithURLString:@"http://128.195.185.104:8080/musicglove/resources/saves/temp/RIVA_log.txt" andDelegate:self];
+ [downloader requestDownload];
+ }
+ */
 
 - (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
 {
@@ -65,7 +65,7 @@ int counter;
     [self loadScrollMainItem];
     [self loadMainPointingBar];
     
-
+    
 }
 
 - (void)viewWillAppear:(BOOL)animated
@@ -110,10 +110,16 @@ int counter;
 - (void)didReceiveMemoryWarning
 {
     [super didReceiveMemoryWarning];
-   
+    
 }
 
 - (void)loadMainPointingBar
+{
+    NrMainItemView *item = [[[NSBundle mainBundle] loadNibNamed:@"NrMainItemView_iPhone" owner:self options:nil] objectAtIndex:0];
+    [self loadPointingBarFromFrame:item.frame];
+}
+
+- (void)loadTestPointingBar
 {
     NrMainItemView *item = [[[NSBundle mainBundle] loadNibNamed:@"NrMainItemView_iPhone" owner:self options:nil] objectAtIndex:0];
     [self loadPointingBarFromFrame:item.frame];
@@ -127,7 +133,7 @@ int counter;
 - (void)loadScrollMainItem
 {
     self.scroll = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 0, self.daysView.frame.size.width, self.daysView.frame.size.height)];
-
+    
     
     NSInteger numberOfItems = 6;
     
@@ -139,9 +145,9 @@ int counter;
     for (int i = 0; i < numberOfItems; i++) {
         NrMainItemView *littleView = [[NrMainItemView alloc] initWithID:i];
         
-
-            littleView.backgroundColor = [UIColor clearColor];
-
+        
+        littleView.backgroundColor = [UIColor clearColor];
+        
         
         littleView.frame = CGRectMake(littleView.frame.size.width * i, 0, littleView.frame.size.width, littleView.frame.size.height);
         
@@ -160,22 +166,58 @@ int counter;
     [self.daysView addSubview:scroll];
 }
 
+- (void)loadScrollTestItem
+{
+    self.scroll = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 0, self.daysView.frame.size.width, self.daysView.frame.size.height)];
+    
+    
+    NSInteger numberOfItems = 6;
+    
+    NrMainItemView *sampleLittleView = [[NrMainItemView alloc] initWithID:0];
+    self.contentsView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, sampleLittleView.frame.size.width * numberOfItems, self.daysView.frame.size.height)];
+    
+    self.itemList = [NSMutableArray array];
+    
+    for (int i = 0; i < numberOfItems; i++) {
+        NrMainItemView *littleView = [[NrMainItemView alloc] initWithID:i];
+        
+        
+        littleView.backgroundColor = [UIColor clearColor];
+        
+        
+        littleView.frame = CGRectMake(littleView.frame.size.width * i, 0, littleView.frame.size.width, littleView.frame.size.height);
+        
+        [self.contentsView addSubview:littleView];
+        
+        [self fillDayItemWithTestData:littleView];
+        
+        [self.itemList addObject:littleView];
+    }
+    
+    scroll.contentSize = self.contentsView.frame.size;
+    [scroll addSubview:self.contentsView];
+    
+    NSLog(@"Content Size: %@", NSStringFromCGSize(scroll.contentSize));
+    NSLog(@"days view Size: %@", NSStringFromCGSize(scroll.frame.size));
+    [self.daysView addSubview:scroll];
+}
+
 
 - (void)fillDayItemWithMainData:(NrMainItemView *)item
 {
     //Here we'll present the main data (i.e. Calendar, Weather, etc.)
     switch (item.itemID) {
         case 0:
-            item.dayName.text = @"First";
-            item.imgView.image = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"first-img" ofType:@"png"]];
+            item.dayName.text = @"Data";
+            item.imgView.image = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"data" ofType:@"png"]];
             break;
         case 1:
-            item.dayName.text = @"Second";
-            item.imgView.image = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"second-img" ofType:@"png"]];
+            item.dayName.text = @"Calendar";
+            item.imgView.image = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"calendario" ofType:@"png"]];
             break;
         case 2:
-            item.dayName.text = @"Third";
-            item.imgView.image = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"third-img" ofType:@"png"]];
+            item.dayName.text = @"Info";
+            item.imgView.image = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"info" ofType:@"png"]];
             break;
         case 3:
             item.dayName.text = @"Fourth";
@@ -197,10 +239,45 @@ int counter;
     }
 }
 
+- (void)fillDayItemWithTestData:(NrMainItemView *)item
+{
+    //Here we'll present the main data (i.e. Calendar, Weather, etc.)
+    switch (item.itemID) {
+        case 0:
+            item.dayName.text = @"Home";
+            item.imgView.image = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"home" ofType:@"png"]];
+            break;
+        case 1:
+            item.dayName.text = @"Graphs";
+            item.imgView.image = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"graph" ofType:@"png"]];
+            break;
+        case 2:
+            item.dayName.text = @"Settings";
+            item.imgView.image = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"engranaje" ofType:@"png"]];
+            break;
+        case 3:
+            item.dayName.text = @"Fourth";
+            item.imgView.image = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"fourth-img" ofType:@"png"]];
+            break;
+        case 4:
+            item.dayName.text = @"Fifth";
+            item.imgView.image = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"fifth-img" ofType:@"png"]];
+            break;
+        case 5:
+            item.dayName.text = @"Settings";
+            item.imgView.image = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"engranaje" ofType:@"png"]];
+            break;
+            
+        default:
+            item.dayName.text = @"First";
+            item.imgView.image = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"sixth-img" ofType:@"png"]];
+            break;
+    }
+}
 
 - (IBAction)mainItemViewClicked:(id)sender
 {
-
+    
     @synchronized(self) {
         [self cover];
         
@@ -216,6 +293,7 @@ int counter;
         
         switch (calItem.itemID) {
             case 0:
+                [self changeItemsTo:calItem.itemID];
                 [self speakFirstOption];
                 break;
             case 1:
@@ -244,7 +322,7 @@ int counter;
 - (void)speakToSpeakSentences
 {
     NSLog(@"Files to speak: %@", self.filesToSpeak);
-
+    
     [self.glController.modelManager playTemporaryAction:[self.filesToSpeak objectAtIndex:0] withPath:[NSFileManager documentsPath] andDelay:0];
     [self.filesToSpeak removeObjectAtIndex:0];
 }
@@ -258,48 +336,48 @@ int counter;
 
 - (void)speakFirstOption
 {
-  //  self.filesToSpeak = [NSMutableArray array];
-  //  [self addToSpeakFile:@"file1a.wav"];
-  //  [self addToSpeakFile:@"file1b.wav"];
-  //  [self addToSpeakFile:@"file1c.wav"];
-  //  [self speakToSpeakSentences];
+    //  self.filesToSpeak = [NSMutableArray array];
+    //  [self addToSpeakFile:@"file1a.wav"];
+    //  [self addToSpeakFile:@"file1b.wav"];
+    //  [self addToSpeakFile:@"file1c.wav"];
+    //  [self speakToSpeakSentences];
     
     NSArray *sentences = [NSArray arrayWithObjects:
-                          @"This is the way to success. Is this working now?",
+                          @"This is where you can find your energy usage data for your different appliances.",
                           nil];
     [self speakSentences:sentences withMaxLength:400 toFileName:@"speakTest1" inLanguage:NSLocalizedString(@"LANG_TTS", nil)];
 }
 
 - (void)speakSecondOption
 {
-//    self.filesToSpeak = [NSMutableArray array];
-//    [self addToSpeakFile:@"file2a.wav"];
-//    [self addToSpeakFile:@"file2b.wav"];
-//    [self addToSpeakFile:@"file2c.wav"];
-//    [self speakToSpeakSentences];
+    //    self.filesToSpeak = [NSMutableArray array];
+    //    [self addToSpeakFile:@"file2a.wav"];
+    //    [self addToSpeakFile:@"file2b.wav"];
+    //    [self addToSpeakFile:@"file2c.wav"];
+    //    [self speakToSpeakSentences];
     
     // Uses text-to-speech from ispeech.org to translate string into speech
-//    NSArray *sentences = [NSArray arrayWithObjects:
-//                          @"This is the way to success once. This is the way to success twice. This is the way to success third.",
-//                          nil];
+    //    NSArray *sentences = [NSArray arrayWithObjects:
+    //                          @"This is the way to success once. This is the way to success twice. This is the way to success third.",
+    //                          nil];
     NSArray *sentences = [NSArray arrayWithObjects:
-                          @"This is the way to success. This is the way to success.",
+                          @"Here you can manage your calendar in order to schedule various energy usage for your appliances.",
                           nil];
     [self speakSentences:sentences withMaxLength:400 toFileName:@"speakTest2" inLanguage:NSLocalizedString(@"LANG_TTS", nil)];
-
+    
 }
 
 - (void)speakThirdOption
 {
-//    self.filesToSpeak = [NSMutableArray array];
-//    [self addToSpeakFile:@"file3a.wav"];
-//    [self addToSpeakFile:@"file3b.wav"];
-//    [self addToSpeakFile:@"file3c.wav"];
-//    [self speakToSpeakSentences];
+    //    self.filesToSpeak = [NSMutableArray array];
+    //    [self addToSpeakFile:@"file3a.wav"];
+    //    [self addToSpeakFile:@"file3b.wav"];
+    //    [self addToSpeakFile:@"file3c.wav"];
+    //    [self speakToSpeakSentences];
     
     // Ading new Audio locally through hard drive
     self.filesToSpeak = [NSMutableArray array];
-    [self addToSpeakFile:@"car-unlock.wav"];
+    [self addToSpeakFile:@"welcome-assistant.wav"];
     [self speakToSpeakSentences];
 }
 
@@ -307,9 +385,9 @@ int counter;
 {
     self.filesToSpeak = [NSMutableArray array];
     [self addToSpeakFile:@"welcome-assistant.wav"];
-//    [self addToSpeakFile:@"file4a.wav"];
-//    [self addToSpeakFile:@"file4b.wav"];
-//    [self addToSpeakFile:@"file4c.wav"];
+    //    [self addToSpeakFile:@"file4a.wav"];
+    //    [self addToSpeakFile:@"file4b.wav"];
+    //    [self addToSpeakFile:@"file4c.wav"];
     [self speakToSpeakSentences];
 }
 
@@ -346,6 +424,51 @@ int counter;
     [self uncover];
 }
 
+- (void)changeItemsTo:(NSInteger)itemID
+{
+    switch (itemID) {
+            
+        case 0:
+            //          self.currentMode = NR_WEATHER;
+            [self changeItemsToTest];
+            break;
+//        case 1: //CALENDAR -> MG
+//            [self changeItemsToCalendar];
+//            break;
+//        case 2: //ACTIONS DEMO
+//            [self changeItemsToActions];
+//            break;
+    }
+}
 
+- (void)changeItemsToTest
+{
+    self.currentMode = NR_CALENDAR;
+    //    self.eventsTableView.hidden = NO;
+    self.detailWeatherView.hidden = YES;
+    
+    [UIView animateWithDuration:0.3 animations:^{
+        self.scroll.alpha = 0.0f;
+    } completion:^(BOOL finished) {
+        NSLog(@"Animation fade out completed");
+        [self loadScrollTestItem];
+        self.scroll.alpha = 0.0f;
+        [UIView animateWithDuration:0.3 animations:^{
+            self.scroll.alpha = 1.0f;
+        } completion:^(BOOL finished) {
+            NSLog(@"Animation fade in completed");
+            [self.pointingBar removeFromSuperview];
+            [self loadTestPointingBar];
+            [self.contentsView addSubview:self.pointingBar];
+            self.activityIndicator.hidden = YES;
+            [self uncover];
+            
+//            NSError *error;
+//            if (![[GANTracker sharedTracker] trackPageview:@"/app/calendar" withError:&error]) {
+//                NSLog(@"Error in tracking: %@", [error localizedDescription]);
+//            }
+        }];
+    }];
+}
 
 @end
