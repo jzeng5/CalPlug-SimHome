@@ -13,39 +13,33 @@
 #import "NrMainItemView.h"
 #import "NaradaDownloader.h"
 /*
-#define kLocationNameKey @"kLocationNameKey"
-#define kLocationCityCodeKey @"kCityCodeKey"
-#define kLocationZipCodeKey @"kZipCodeKey"
-#define kLocationCountryKey @"kCountryKey"
-#define kLocationStateKey @"kStateKey"
-#define kOpenInfoView @"kOpenInfoView"
-
-#define kApplicationUnlocked @"kApplicationUnlocked"
-
-#define notificationWakeFromLocalNotification @"notificationWakeFromLocalNotification"
-
-#define kVotedForHoroscope      @"kVotedForHoroscope"
-#define kVotedForRestaurants    @"kVotedForRestaurants"
-#define kVotedForPubs           @"kVotedForPubs"
-#define kVotedForFlights        @"kVotedForFlights"
-#define kVotedForHotels         @"kVotedForHotels"
-#define kVotedForCarRental      @"kVotedForCarRental"
-
-#ifdef __APPLE__
-#include "TargetConditionals.h"
-#endif
-
-enum voteOptions {
-    NO_VOTE,
-    HOROSCOPE,
-    RESTAURANTS,
-    PUBS,
-    FLIGHTS,
-    HOTELS,
-    CARRENTAL
-};
-
-*/
+ #define kLocationNameKey @"kLocationNameKey"
+ #define kLocationCityCodeKey @"kCityCodeKey"
+ #define kLocationZipCodeKey @"kZipCodeKey"
+ #define kLocationCountryKey @"kCountryKey"
+ #define kLocationStateKey @"kStateKey"
+ #define kOpenInfoView @"kOpenInfoView"
+ #define kApplicationUnlocked @"kApplicationUnlocked"
+ #define notificationWakeFromLocalNotification @"notificationWakeFromLocalNotification"
+ #define kVotedForHoroscope      @"kVotedForHoroscope"
+ #define kVotedForRestaurants    @"kVotedForRestaurants"
+ #define kVotedForPubs           @"kVotedForPubs"
+ #define kVotedForFlights        @"kVotedForFlights"
+ #define kVotedForHotels         @"kVotedForHotels"
+ #define kVotedForCarRental      @"kVotedForCarRental"
+ #ifdef __APPLE__
+ #include "TargetConditionals.h"
+ #endif
+ enum voteOptions {
+ NO_VOTE,
+ HOROSCOPE,
+ RESTAURANTS,
+ PUBS,
+ FLIGHTS,
+ HOTELS,
+ CARRENTAL
+ };
+ */
 
 @interface NrCalendarMainViewController : NrMainViewController <
 UITableViewDataSource,
@@ -67,9 +61,19 @@ NaradaDownloaderDelegate
 //- (IBAction)mainItemViewClicked:(id)sender;
 
 - (void)loadMainPointingBar;
+- (void)loadTestPointingBar;
+
 - (void)movePointingBarToItem:(NrMainItemView *)item;
+
 - (void)loadScrollMainItem;
+- (void)loadScrollTestItem;
+
 - (void)loadWeatherIcons;
+
 - (void)fillDayItemWithMainData:(NrMainItemView *)item;
+- (void)fillDayItemWithTestData:(NrMainItemView *)item;
+
+- (void)changeItemsTo:(NSInteger)itemID;
+- (void)changeItemsToTest;
 
 @end
