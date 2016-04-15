@@ -6,6 +6,8 @@
 //  Copyright (c) 2012 Narada Robotics S.L. All rights reserved.
 //
 
+#import "NaradaDownloader.h"
+#import "NaradaDownloaderDelegate.h"
 #import "NrCalendarMainViewController.h"
 #import "NrAppDelegate.h"
 
@@ -34,20 +36,64 @@ BOOL fromLoadProfile = NO;
 BOOL moreShown = NO;
 BOOL pendingNotification = NO;
 BOOL started;
+BOOL talking;
 int counter;
-/*
+NSTimer *timer;
+
+// Function that gets called within timed-intervals
  - (void)increaseTimerCount
- {
- self.TimerButton.text = [NSString stringWithFormat:@"%d", counter];
+{
+//    self.TimerButton.text = [NSString stringWithFormat:@"%d", counter];
  
- if (started) {
- counter ++;
- }
- 
- NaradaDownloader *downloader = [[NaradaDownloader alloc] initWithURLString:@"http://128.195.185.104:8080/musicglove/resources/saves/temp/RIVA_log.txt" andDelegate:self];
- [downloader requestDownload];
- }
- */
+    if (started) {
+        counter ++;
+    }
+    
+    NSLog(@"Downloading test file...");
+    
+    // Initialize downloader with URL of file
+    NaradaDownloader *downloader = [[NaradaDownloader alloc] initWithURLString:@"http://opensource.apple.com//source/SpamAssassin/SpamAssassin-127.2/SpamAssassin/t/data/etc/hello.txt?txt" andDelegate:self];
+    
+    // Requests download, displays if connection failed or succeeded
+    [downloader requestDownload];
+    
+    NSLog(@"Done downloading test file!!");
+}
+
+- (void)startTimer
+{
+    // Starts timer w/interval of 10 seconds to call function "increaseTimerCount"
+    
+    timer = [NSTimer scheduledTimerWithTimeInterval:10 target:self selector:@selector(/*increaseTimerCount*/speakFirstOption) userInfo:nil repeats:YES];
+    [timer fire];
+}
+
+- (void)stopTimer
+{
+    // Stops timer
+    
+    [timer invalidate];
+    counter = 0;
+//    self.timerCounterLabel.text = @"0";
+}
+
+- (void)naradaDownlaoderDidFinishDownloading:(NaradaDownloader *)downloader
+{
+    NSLog(@"Did finish successfully!!");
+    NSLog(@"String downloaded: %@", downloader.receivedString);
+}
+
+
+- (void)downloadTest
+{
+    // Downloads test file from public server
+    
+    NSLog(@"Downloading test file from Button 1...");
+    NaradaDownloader *downloader = [[NaradaDownloader alloc] initWithURLString:@"http://www.ics.uci.edu/~pattis/ICS-33/lectures/parameters.py" andDelegate:self];
+    [downloader requestDownload];
+    NSLog(@"String downloaded: %@", downloader.receivedString);
+    NSLog(@"Done downloading test file!!");
+}
 
 - (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
 {
@@ -293,8 +339,12 @@ int counter;
         
         switch (calItem.itemID) {
             case 0:
-                [self changeItemsTo:calItem.itemID];
-                [self speakFirstOption];
+                
+                // Changes menu bar
+//                [self changeItemsTo:calItem.itemID];
+//                [self startTimer];
+                [self increaseTimerCount];
+//                [self speakFirstOption];
                 break;
             case 1:
                 [self speakSecondOption];
@@ -321,10 +371,11 @@ int counter;
 
 - (void)speakToSpeakSentences
 {
-    NSLog(@"Files to speak: %@", self.filesToSpeak);
-    
-    [self.glController.modelManager playTemporaryAction:[self.filesToSpeak objectAtIndex:0] withPath:[NSFileManager documentsPath] andDelay:0];
-    [self.filesToSpeak removeObjectAtIndex:0];
+        NSLog(@"Files to speak: %@", self.filesToSpeak);
+        
+        [self.glController.modelManager playTemporaryAction:[self.filesToSpeak objectAtIndex:0] withPath:[NSFileManager documentsPath] andDelay:0];
+        [self.filesToSpeak removeObjectAtIndex:0];
+
 }
 
 - (void)addToSpeakFile:(NSString *)filename
@@ -341,7 +392,7 @@ int counter;
     //  [self addToSpeakFile:@"file1b.wav"];
     //  [self addToSpeakFile:@"file1c.wav"];
     //  [self speakToSpeakSentences];
-    
+//    [self downloadTest];
     NSArray *sentences = [NSArray arrayWithObjects:
                           @"This is where you can find your energy usage data for your different appliances.",
                           nil];
