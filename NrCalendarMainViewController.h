@@ -65,14 +65,17 @@ NaradaDownloaderDelegate
 
 - (void)movePointingBarToItem:(NrMainItemView *)item;
 
+// Menu-loading methods
 - (void)loadScrollMainItem;
 - (void)loadScrollTestItem;
 
 - (void)loadWeatherIcons;
 
+// Menu-filling methods
 - (void)fillDayItemWithMainData:(NrMainItemView *)item;
 - (void)fillDayItemWithTestData:(NrMainItemView *)item;
 
+// Menu-changing methods
 - (void)changeItemsTo:(NSInteger)itemID;
 - (void)changeItemsToTest;
 
