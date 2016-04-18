@@ -36,64 +36,26 @@ BOOL fromLoadProfile = NO;
 BOOL moreShown = NO;
 BOOL pendingNotification = NO;
 BOOL started;
-BOOL talking;
+BOOL timerStarted = false;
 int counter;
-NSTimer *timer;
-
-// Function that gets called within timed-intervals
- - (void)increaseTimerCount
-{
-//    self.TimerButton.text = [NSString stringWithFormat:@"%d", counter];
- 
-    if (started) {
-        counter ++;
-    }
-    
-    NSLog(@"Downloading test file...");
-    
-    // Initialize downloader with URL of file
-    NaradaDownloader *downloader = [[NaradaDownloader alloc] initWithURLString:@"http://opensource.apple.com//source/SpamAssassin/SpamAssassin-127.2/SpamAssassin/t/data/etc/hello.txt?txt" andDelegate:self];
-    
-    // Requests download, displays if connection failed or succeeded
-    [downloader requestDownload];
-    
-    NSLog(@"Done downloading test file!!");
-}
-
-- (void)startTimer
-{
-    // Starts timer w/interval of 10 seconds to call function "increaseTimerCount"
-    
-    timer = [NSTimer scheduledTimerWithTimeInterval:10 target:self selector:@selector(/*increaseTimerCount*/speakFirstOption) userInfo:nil repeats:YES];
-    [timer fire];
-}
-
-- (void)stopTimer
-{
-    // Stops timer
-    
-    [timer invalidate];
-    counter = 0;
-//    self.timerCounterLabel.text = @"0";
-}
-
-- (void)naradaDownlaoderDidFinishDownloading:(NaradaDownloader *)downloader
-{
-    NSLog(@"Did finish successfully!!");
-    NSLog(@"String downloaded: %@", downloader.receivedString);
-}
 
 
-- (void)downloadTest
-{
-    // Downloads test file from public server
-    
-    NSLog(@"Downloading test file from Button 1...");
-    NaradaDownloader *downloader = [[NaradaDownloader alloc] initWithURLString:@"http://www.ics.uci.edu/~pattis/ICS-33/lectures/parameters.py" andDelegate:self];
-    [downloader requestDownload];
-    NSLog(@"String downloaded: %@", downloader.receivedString);
-    NSLog(@"Done downloading test file!!");
-}
+NSString* download_link = @"https://drive.google.com/a/uci.edu/uc?export&confirm=no_antivirus&id=0B2OE3bpKOXc6ZVlkWHRVcm05YzQ";
+int speech_counter;                                             // For creating unique FBA files
+NSTimer *timer;                                                 // Timer instance
+NSMutableDictionary *action_flags = [NSMutableDictionary        // Action flags dictionary
+                              dictionaryWithDictionary:@{
+                                    @"TIME"             : @"",
+                                    @"SPEAK"            : @"",
+                                    @"TTS"              : @"",
+                                    @"FACIAL_ANIMATION" : @"",
+                                    @"SHOW_INFO"        : @"",
+                                    @"INFO"             : @""
+                            }];
+
+
+#pragma mark -
+#pragma mark Initialization
 
 - (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
 {
@@ -105,13 +67,14 @@ NSTimer *timer;
     return self;
 }
 
+#pragma mark -
+#pragma mark View Functions
+
 - (void)viewDidLoad
 {
     [super viewDidLoad];
     [self loadScrollMainItem];
     [self loadMainPointingBar];
-    
-    
 }
 
 - (void)viewWillAppear:(BOOL)animated
@@ -145,6 +108,8 @@ NSTimer *timer;
     } completion:^(BOOL finished) {
         NSLog(@"Assistant view shown");
     }];
+    
+    [self startTimer];
 }
 
 
@@ -158,6 +123,9 @@ NSTimer *timer;
     [super didReceiveMemoryWarning];
     
 }
+
+#pragma mark -
+#pragma mark Pointing Bar Functions
 
 - (void)loadMainPointingBar
 {
@@ -175,6 +143,9 @@ NSTimer *timer;
 {
     [self movePointingBarToFrame:item.frame];
 }
+
+#pragma mark -
+#pragma mark Menu Item Functions
 
 - (void)loadScrollMainItem
 {
@@ -321,6 +292,53 @@ NSTimer *timer;
     }
 }
 
+- (void)changeItemsTo:(NSInteger)itemID
+{
+    switch (itemID) {
+            
+        case 0:
+            //          self.currentMode = NR_WEATHER;
+            [self changeItemsToTest];
+            break;
+            //        case 1: //CALENDAR -> MG
+            //            [self changeItemsToCalendar];
+            //            break;
+            //        case 2: //ACTIONS DEMO
+            //            [self changeItemsToActions];
+            //            break;
+    }
+}
+
+- (void)changeItemsToTest
+{
+    self.currentMode = NR_CALENDAR;
+    //    self.eventsTableView.hidden = NO;
+    self.detailWeatherView.hidden = YES;
+    
+    [UIView animateWithDuration:0.3 animations:^{
+        self.scroll.alpha = 0.0f;
+    } completion:^(BOOL finished) {
+        NSLog(@"Animation fade out completed");
+        [self loadScrollTestItem];
+        self.scroll.alpha = 0.0f;
+        [UIView animateWithDuration:0.3 animations:^{
+            self.scroll.alpha = 1.0f;
+        } completion:^(BOOL finished) {
+            NSLog(@"Animation fade in completed");
+            [self.pointingBar removeFromSuperview];
+            [self loadTestPointingBar];
+            [self.contentsView addSubview:self.pointingBar];
+            self.activityIndicator.hidden = YES;
+            [self uncover];
+            
+            //            NSError *error;
+            //            if (![[GANTracker sharedTracker] trackPageview:@"/app/calendar" withError:&error]) {
+            //                NSLog(@"Error in tracking: %@", [error localizedDescription]);
+            //            }
+        }];
+    }];
+}
+
 - (IBAction)mainItemViewClicked:(id)sender
 {
     
@@ -342,11 +360,12 @@ NSTimer *timer;
                 
                 // Changes menu bar
 //                [self changeItemsTo:calItem.itemID];
-//                [self startTimer];
-                [self increaseTimerCount];
-//                [self speakFirstOption];
+
+                [self stopTimer];
+                [self speakFirstOption];
                 break;
             case 1:
+//                [self stopTimer];
                 [self speakSecondOption];
                 break;
             case 2:
@@ -368,6 +387,155 @@ NSTimer *timer;
     }
 }
 
+#pragma mark -
+#pragma mark Timer Functions
+
+- (void)startTimer
+{
+    // Starts timer w/interval of 10 seconds to call function "increaseTimerCount"
+    if (!timerStarted) {
+        
+        timerStarted = true;
+        
+        timer = [NSTimer scheduledTimerWithTimeInterval:10 target:self selector:@selector(downloadString) userInfo:nil repeats:YES];
+        [timer fire];
+    }
+}
+
+- (void)stopTimer
+{
+    // Stops timer
+    if (timerStarted) {
+        
+        timerStarted = false;
+        
+        [timer invalidate];
+        counter = 0;
+        //    self.timerCounterLabel.text = @"0";
+    }
+    
+}
+
+- (void)increaseTimerCount
+{
+    // Function that gets called within timed-intervals
+    
+    //    self.TimerButton.text = [NSString stringWithFormat:@"%d", counter];
+    
+    if (started) {
+        counter ++;
+    }
+    
+    [self downloadString];
+}
+
+#pragma mark -
+#pragma mark Downloader Functions
+
+// Edited by Christian Morte - CalPlug - SimHome - 4/17/16
+
+- (void)downloadString
+{
+    // Downloads test file from public server
+    
+    NSLog(@"Downloading test file from Button 1...");
+    
+    // Initialize downloader with URL of file
+    NaradaDownloader *downloader = [[NaradaDownloader alloc] initWithURLString:download_link andDelegate:self];
+    
+    // Requests download, displays if connection failed or succeeded
+    [downloader requestDownload];
+}
+
+- (NSMutableDictionary*)parseDownloadedString: (NSString *) downloadedString
+{
+    // Parses downloaded string and returns a dictionary w/flags and values of that string
+    
+    NSMutableDictionary* dict = [NSMutableDictionary dictionary];
+    
+    NSArray *components = [downloadedString componentsSeparatedByString:@";"];
+    NSLog(@"Downloaded String components: %@", components);
+    
+    
+    for (NSString* string in components) {
+        if (![string  isEqual: @""]) {
+            NSArray* sub_components = [string componentsSeparatedByString:@"="];
+            
+            NSString* flag = [sub_components objectAtIndex:0];
+            
+            // Insert special cases for values here (eg. value should be an int, string, char, etc.)
+            NSString* value = [sub_components objectAtIndex:1];
+            
+            dict[flag] = value;
+        }
+    }
+    
+    NSLog(@"Dictionary created: %@", dict);
+    
+    return dict;
+}
+
+- (void)naradaDownlaoderDidFinishDownloading:(NaradaDownloader *)downloader
+{
+    NSLog(@"Did download successfully!!");
+    NSLog(@"String downloaded: %@", downloader.receivedString);
+    
+    // If the file changed, replace old contents of action flags w/new content
+    if ( [self timeHasChanged: downloader.receivedString] ) {
+        NSLog(@"THE TIME CHANGED!");
+        
+        // create new set of action flags
+        NSDictionary* new_flags = [self parseDownloadedString:downloader.receivedString];
+        
+        // Replace contents of current action flags w/new ones
+        for (NSString* flag in new_flags) {
+            [action_flags setObject:new_flags[flag] forKey:flag];
+        }
+        
+        [self do_actions];
+    }
+}
+
+- (void)naradaDownloader:(NaradaDownloader *)downloader didFailWithError:(NSError *)error
+{
+    NSLog(@"Downloader failed with error: %@", error.description);
+}
+
+#pragma mark -
+#pragma mark Action Functions
+
+- (BOOL)timeHasChanged:(NSString *) downloadedString
+{
+    // returns true if time has changed from RIVA.txt
+    
+    NSArray *components = [downloadedString componentsSeparatedByString:@";"];
+    NSString *time_flag = [components objectAtIndex:0];
+    NSString *time = [ [time_flag componentsSeparatedByString:@"="] objectAtIndex:1];
+    
+    if ( ![time isEqual:action_flags[@"TIME"]] )
+        return true;
+    
+    return false;
+}
+
+- (void)speakAction:(NSString *)sentence
+{
+    NSString* filename = [NSString stringWithFormat:@"%@%d", @"speakTestAction", speech_counter++];
+    
+    NSArray *sentences = [NSArray arrayWithObjects: sentence, nil];
+    [self speakSentences:sentences withMaxLength:400 toFileName:filename inLanguage:NSLocalizedString(@"LANG_TTS", nil)];
+}
+
+- (void)do_actions
+{
+    // add more actions from set of action flags to make model do more stuff
+    
+    if ([action_flags[@"SPEAK"] isEqual:@"1"])
+        [self speakAction:action_flags[@"TTS"]];
+}
+
+#pragma mark -
+#pragma mark Speak Functions
 
 - (void)speakToSpeakSentences
 {
@@ -392,7 +560,6 @@ NSTimer *timer;
     //  [self addToSpeakFile:@"file1b.wav"];
     //  [self addToSpeakFile:@"file1c.wav"];
     //  [self speakToSpeakSentences];
-//    [self downloadTest];
     NSArray *sentences = [NSArray arrayWithObjects:
                           @"This is where you can find your energy usage data for your different appliances.",
                           nil];
@@ -460,6 +627,7 @@ NSTimer *timer;
     [self speakToSpeakSentences];
 }
 
+#pragma mark -
 #pragma mark Finish Speaking Handler
 
 - (void)handleWillBeginSpeaking
@@ -473,53 +641,6 @@ NSTimer *timer;
 {       
     self.activityIndicator.hidden = YES;
     [self uncover];
-}
-
-- (void)changeItemsTo:(NSInteger)itemID
-{
-    switch (itemID) {
-            
-        case 0:
-            //          self.currentMode = NR_WEATHER;
-            [self changeItemsToTest];
-            break;
-//        case 1: //CALENDAR -> MG
-//            [self changeItemsToCalendar];
-//            break;
-//        case 2: //ACTIONS DEMO
-//            [self changeItemsToActions];
-//            break;
-    }
-}
-
-- (void)changeItemsToTest
-{
-    self.currentMode = NR_CALENDAR;
-    //    self.eventsTableView.hidden = NO;
-    self.detailWeatherView.hidden = YES;
-    
-    [UIView animateWithDuration:0.3 animations:^{
-        self.scroll.alpha = 0.0f;
-    } completion:^(BOOL finished) {
-        NSLog(@"Animation fade out completed");
-        [self loadScrollTestItem];
-        self.scroll.alpha = 0.0f;
-        [UIView animateWithDuration:0.3 animations:^{
-            self.scroll.alpha = 1.0f;
-        } completion:^(BOOL finished) {
-            NSLog(@"Animation fade in completed");
-            [self.pointingBar removeFromSuperview];
-            [self loadTestPointingBar];
-            [self.contentsView addSubview:self.pointingBar];
-            self.activityIndicator.hidden = YES;
-            [self uncover];
-            
-//            NSError *error;
-//            if (![[GANTracker sharedTracker] trackPageview:@"/app/calendar" withError:&error]) {
-//                NSLog(@"Error in tracking: %@", [error localizedDescription]);
-//            }
-        }];
-    }];
 }
 
 @end
