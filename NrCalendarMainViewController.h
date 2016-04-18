@@ -58,7 +58,7 @@ NaradaDownloaderDelegate
 @property (nonatomic, strong) NSMutableArray *itemList;
 
 
-//- (IBAction)mainItemViewClicked:(id)sender;
+- (IBAction)mainItemViewClicked:(id)sender;
 
 - (void)loadMainPointingBar;
 - (void)loadTestPointingBar;
