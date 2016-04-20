@@ -39,6 +39,7 @@ BOOL started;
 BOOL timerStarted = false;
 int counter;
 
+// added by Christian Morte - CalPlug SimHome - 4/17/16
 
 NSString* download_link = @"https://drive.google.com/a/uci.edu/uc?export&confirm=no_antivirus&id=0B2OE3bpKOXc6ZVlkWHRVcm05YzQ";
 int speech_counter;                                             // For creating unique FBA files
