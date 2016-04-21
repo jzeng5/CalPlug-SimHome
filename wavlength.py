@@ -1,5 +1,7 @@
 """ Created by Christian Morte. 2-25-2015.
     iOS Development Team - SIMHome - CalPlug
+    
+    Script that obtains the length of a wav file.
 """
 
 import os.path
