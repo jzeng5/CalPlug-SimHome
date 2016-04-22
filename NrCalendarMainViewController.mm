@@ -39,9 +39,7 @@ BOOL started;
 BOOL timerStarted = false;
 int counter;
 
-// added by Christian Morte - CalPlug SimHome - 4/17/16
-
-BOOL should_speak;
+BOOL can_speak = true;
 NSString* download_link = @"https://drive.google.com/a/uci.edu/uc?export&confirm=no_antivirus&id=0B2OE3bpKOXc6ZVlkWHRVcm05YzQ";
 int speech_counter;                                             // For creating unique FBA files
 NSTimer *timer;                                                 // Timer instance
@@ -343,49 +341,48 @@ NSMutableDictionary *action_flags = [NSMutableDictionary        // Action flags 
 
 - (IBAction)mainItemViewClicked:(id)sender
 {
-    
-    @synchronized(self) {
-        [self cover];
-        
-        NrMainItemView *calItem = (NrMainItemView *)sender;
-        NSLog(@"Clicked at item %d", calItem.itemID);
-        
-        self.selectedItem = calItem.itemID;
-        
-        [self movePointingBarToItem:calItem];
-        
-        self.activityIndicator.hidden = NO;
-        [self.activityIndicator startAnimating];
-        
-        switch (calItem.itemID) {
-            case 0:
-                
-                // Changes menu bar
-//                [self changeItemsTo:calItem.itemID];
-
-                [self stopTimer];
-                [self speakFirstOption];
-                break;
-            case 1:
-//                [self stopTimer];
-                [self speakSecondOption];
-                break;
-            case 2:
-                [self speakThirdOption];
-                break;
-            case 3:
-                [self speakFourthOption];
-                break;
-            case 4:
-                [self speakFifthOption];
-                break;
-            case 5:
-                [self speakSixthOption];
-                break;
-            default:
-                break;
+    if (can_speak) {
+        @synchronized(self) {
+            [self cover];
+            
+            NrMainItemView *calItem = (NrMainItemView *)sender;
+            NSLog(@"Clicked at item %d", calItem.itemID);
+            
+            self.selectedItem = calItem.itemID;
+            
+            [self movePointingBarToItem:calItem];
+            
+            self.activityIndicator.hidden = NO;
+            [self.activityIndicator startAnimating];
+            
+            switch (calItem.itemID) {
+                case 0:
+                    
+                    // Changes menu bar
+                    //                [self changeItemsTo:calItem.itemID];
+                    [self speakFirstOption];
+                    break;
+                case 1:
+                    //                [self stopTimer];
+                    [self speakSecondOption];
+                    break;
+                case 2:
+                    [self speakThirdOption];
+                    break;
+                case 3:
+                    [self speakFourthOption];
+                    break;
+                case 4:
+                    [self speakFifthOption];
+                    break;
+                case 5:
+                    [self speakSixthOption];
+                    break;
+                default:
+                    break;
+            }
+            
         }
-        
     }
 }
 
@@ -395,8 +392,7 @@ NSMutableDictionary *action_flags = [NSMutableDictionary        // Action flags 
 - (void)startTimer
 {
     // Starts timer w/interval of 10 seconds to call function "increaseTimerCount"
-    if (!timerStarted) {
-        
+    if (![timer isValid]) {
         timerStarted = true;
         
         timer = [NSTimer scheduledTimerWithTimeInterval:10 target:self selector:@selector(downloadString) userInfo:nil repeats:YES];
@@ -407,14 +403,14 @@ NSMutableDictionary *action_flags = [NSMutableDictionary        // Action flags 
 - (void)stopTimer
 {
     // Stops timer
-    if (timerStarted) {
-        
+    if ([timer isValid]) {
         timerStarted = false;
         
         [timer invalidate];
+        timer = nil;
         counter = 0;
-        //    self.timerCounterLabel.text = @"0";
     }
+    //    self.timerCounterLabel.text = @"0";
     
 }
 
@@ -440,7 +436,7 @@ NSMutableDictionary *action_flags = [NSMutableDictionary        // Action flags 
 {
     // Downloads test file from public server
     
-    NSLog(@"Downloading test file from Button 1...");
+    NSLog(@"Downloading test file from %@", download_link);
     
     // Initialize downloader with URL of file
     NaradaDownloader *downloader = [[NaradaDownloader alloc] initWithURLString:download_link andDelegate:self];
@@ -522,10 +518,14 @@ NSMutableDictionary *action_flags = [NSMutableDictionary        // Action flags 
 
 - (void)speakAction:(NSString *)sentence
 {
-    NSString* filename = [NSString stringWithFormat:@"%@%d", @"speakTestAction", speech_counter++];
+    NSLog(@"Model can speak: %hhd", can_speak);
     
-    NSArray *sentences = [NSArray arrayWithObjects: sentence, nil];
-    [self speakSentences:sentences withMaxLength:400 toFileName:filename inLanguage:NSLocalizedString(@"LANG_TTS", nil)];
+    if (can_speak) {
+        NSString* filename = [NSString stringWithFormat:@"%@%d", @"speakTestAction", speech_counter++];
+        
+        NSArray *sentences = [NSArray arrayWithObjects: sentence, nil];
+        [self speakSentences:sentences withMaxLength:400 toFileName:filename inLanguage:NSLocalizedString(@"LANG_TTS", nil)];
+    }
 }
 
 - (void)do_actions
@@ -635,14 +635,18 @@ NSMutableDictionary *action_flags = [NSMutableDictionary        // Action flags 
 - (void)handleWillBeginSpeaking
 {
     self.activityIndicator.hidden = YES;
+    NSLog(@"I am about to speak");
+    can_speak = false;
 }
 
 
 
 - (void)handleDidFinishSpeaking
-{       
+{
     self.activityIndicator.hidden = YES;
     [self uncover];
+    NSLog(@"I just spoke");
+    can_speak = true;
 }
 
 @end
