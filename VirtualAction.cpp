@@ -78,8 +78,13 @@ bool VirtualBasicAction::loadBasicAction(std::string path, std::string name, boo
 
     // To extend FBA (lipsync) by constant amount
     // This actually delays starting point of voice
+    
+    // longer strings: larger timeoffset?
+    // shorter strings: shorter timeoffset?
+    // should NOT set timeoffset to 0.
+    
 	actionPointer = character->getFAPlayer()->addTrack(const_cast<char*>(fullPath.c_str()), (loop?1:0),
-                                    name.find("Test") == std::string::npos ? timeOffset : -1000);
+                                    name.find("Test") == std::string::npos ? timeOffset : -1000); // long string
     stopBasicAction();
 
     return true;
