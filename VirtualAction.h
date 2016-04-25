@@ -81,20 +81,12 @@ public:
 
 
 private:
-    typedef NS_ENUM(NSUInteger, Timeoffset) {
-        IPAD = 100,
-        IPADAIR = 100,
-        IPHONE4 = 100,
-        IPHONE5 = 100,
-        IPHONE6 = 100,
-    };
-    
 	bool loadBasicAction(std::string path, std::string name, bool loop);
 	VirtualCharacter *character;
 	FbaFileAction *actionPointer;
 	std::vector<long> scheduled;
 	std::string fullPath;
-    const Timeoffset timeOffset = IPHONE6;
+    long adjustDelay(long msDelay);
 
 	bool playing;
 };
