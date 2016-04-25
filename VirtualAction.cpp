@@ -1,1044 +1,628 @@
-//
-//  ModelManager.mm
-//  BasicCharacter
-//
-//  Created by Enrique Oriol on 28/06/12.
-//  Copyright (c) 2012 __MyCompanyName__. All rights reserved.
-//
+/*
+ * VirtualAction.cpp
+ *
+ *  Created on: 11/01/2012
+ *      Author: narada
+ */
 
-#import "ModelManager.h"
+#include "VirtualAction.h"
 
-#include <cmath>
-#include <string>
-#include <vector>
-//OLD API
-#import "LipSync.h"
+#include <fstream>
 
-#import "ES1Renderer.h"
 
-#include "VirtualCharacter.hpp"
-#include "OGLViewer.h"
-
-#include <CoreGraphics/CGImage.h>
-
-#import <AVFoundation/AVFoundation.h>
-#import <AVFoundation/AVAssetWriterInput.h>
-#import <CoreVideo/CVPixelBuffer.h>
-#import <UIKit/UIKit.h>
-
-#import <AudioToolbox/AudioToolbox.h>
-
-#import "NaradaNotificationCenter.hpp"
+namespace VisageSDK {
 
 
 
-using std::string;
-using namespace VisageSDK;
-
-
-VirtualCharacter *character;
-OGLViewer *glViewer;
-
-
+///////////////////////////////////////
+///////////////////////////////////////
+////  CODE for VirtualBasicAction  ////
+///////////////////////////////////////
+///////////////////////////////////////
 
 
 
-const NSString* pathToDocuments = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0];
-const NSString* aacPath = [pathToDocuments stringByAppendingPathComponent:@"output.aac"];
-const NSString* videoOnlyPath = [pathToDocuments stringByAppendingPathComponent:@"TestVideo.mp4"];
-const NSString* videoMixedPath = [pathToDocuments stringByAppendingPathComponent:@"My Virtual Assistant.mp4"];
-
-
-
-@implementation ModelManager
-
-@synthesize isExporting;
-@synthesize isPlayingRecorded;
-@synthesize isTrackingRotAndPos;
-@synthesize isPlayingTrackedRotAndPos;
-
-@synthesize changeBackgroundPath;
-
-
-@synthesize frame_count;
-@synthesize margin_beats;
-@synthesize nFrames;
-
-@synthesize duration;
-@synthesize hideCounter;
-@synthesize startSession;
-
-@synthesize width;
-@synthesize height;
-@synthesize loadingPercentage;
-
-@synthesize modelName = _modelName;
-@synthesize background = _modelBacground;
-
-
-
-void modelHasFinishedSpeaking()
+/**
+ *
+ * @brief Constructor: init data members and load the basic action with name and path passed as arguments
+ *
+ * @param path 	path to the FBA file with the action to load
+ * @param name 	name of the FBA file with the action to load
+ * @param loop 	whether the action has to be played only once, or it has to loop
+ * @param vc 	pointer to the VirtualCharacter
+ */
+VirtualBasicAction::VirtualBasicAction(std::string path, std::string name, bool loop, VirtualCharacter* vc)
 {
-    [[NSNotificationCenter defaultCenter] postNotificationName:notificationFinishedSpeaking object:nil];
-    std::cout << "Narada Notification: finished Speaking" << std::endl;
-}
-
-void modelHasFinishedTemporaryAction()
-{
-    [[NSNotificationCenter defaultCenter] postNotificationName:notificationFinishedSpeaking object:nil];
-    std::cout << "Narada Notification: finished temporary action" << std::endl;    
-}
-
-void modelLoadMonitoring(int percentage)
-{
-    std::cout << "Loading model, percentage: " << percentage << "/100" <<std::endl;
-    
-    NSDictionary* dict = [NSDictionary dictionaryWithObject: [NSNumber numberWithFloat:((float)percentage)/100] forKey:@"percentage"];
-    [[NSNotificationCenter defaultCenter] postNotificationName:notificationModifiedLoadingBar object:nil userInfo:dict];
-    
+	playing = false;
+	character = vc;
+	actionPointer = 0;
+	if(!loadBasicAction(path, name, loop))
+		throw NaradaException("cannot load action");
 
 }
 
 
 
--(ModelManager *)initWithName:(NSString*)name Background:(NSString*)background Width:(int)theWidth Height:(int)theHeight
+
+/**
+ *
+ * @brief Destructor: deletes the action pointer in case it's not null
+ *
+ */
+VirtualBasicAction::~VirtualBasicAction()
 {
-    if (self = [super init]) {
-        
-        hideCounter = 0;
-        self.modelName = name;
-        self.background = background;
-        
-        self.width = theWidth;
-        self.height = theHeight;
-        changeBackground = NO;
-        
-        animateRotation = NO;
-        animateTranslation = NO;
-        
-        
-        self.changeBackgroundPath = Nil;
-        isExporting = false;
-        isTrackingRotAndPos = FALSE;
-        isPlayingTrackedRotAndPos = FALSE;
-        recording_counter = 0;
-        
-        loadingPercentage = 0;
-        frame_count = 0;
-        margin_beats = 0;
-        nFrames = 0;
-        duration = 0.0;
-        trackingPosition = 0;
-        hideCounter = -1;
-        startSession = true;
-        rotTrackFrameRateAdjust = 0;
-        
-    }
-    
-    return self;
-}
- 
-    
--(void)initModelWithViewWidth:(int)theWidth andHeight:(int)theHeight
-{
-    
-//    CGRect screenBounds = [[UIScreen mainScreen] bounds];
-//    CGFloat screenScale = [[UIScreen mainScreen] scale];
-//    CGSize screenSize = CGSizeMake(screenBounds.size.width * screenScale, screenBounds.size.height * screenScale);
-    
-    self.width = theWidth;
-    self.height = theHeight;
-    isExporting = false;
-    isTrackingRotAndPos = FALSE;
-    isPlayingTrackedRotAndPos = FALSE;
-    recording_counter = 0;
-    
-    animateRotation = NO;
-    animateTranslation = NO;
-    
-    loadingPercentage = 0;
-    frame_count = 0;
-    margin_beats = 0;
-    nFrames = 0;
-    duration = 0.0;
-    trackingPosition = 0;
-    hideCounter = -1;
-    startSession = true;
-    rotTrackFrameRateAdjust = 0;
-    
-    
-    [self initCharacter];
-}
-    
-
-
--(void)initCharacter
-{
-    [self initCharacterWithPerspective:FALSE];
-}
-
-
--(void) initCharacterWithPerspective:(BOOL)persp
-{
-    bool perspective = false;
-    if(persp)
-        perspective = true;
-
-    if(sizeof(self.modelName)>0)
-    {
-        //Assign handler to NaradaNotificationCenter
-        NaradaNotificationCenter::subscribeNotification(VirtualCharacter::naradaNotificationJustFinishedSpeaking, &modelHasFinishedSpeaking);
-        NaradaNotificationCenter::subscribeNotification(VirtualCharacter::naradaNotificationJustFinishedTemporaryAction, &modelHasFinishedTemporaryAction);
-        NaradaNotificationCenter::subscribeNotification(VirtualCharacter::naradaNotificationLoadingProgressPercentage, &modelLoadMonitoring);
-        
-        
-        glViewer = new OGLViewer(width, height, string([self.background UTF8String]), perspective);
-        char *filename = [self getPathFromNSStringTo:self.modelName];
-        character = glViewer->loadCharacter(filename);
-
-    //    //in case using perspective
-    //    character->zoomToFitWidthPercentage(0.7);
-    //    [self moveModelX:0 y:height*0.6 absolute:NO];
-        
-        character->playBodyBackground();
-        character->playFaceBackground();
-        character->setSpeakRealTime(false);
-        
-    }
-    else
-        NSLog(@"Model name has not been specified");
-    
+	if(actionPointer)
+		delete actionPointer;
 }
 
 
 
-
-- (BOOL)isModelLoaded
+/**
+ *
+ * @brief reads an FBA file with a basic action, and loads it
+ *
+ * @param path	path to the FBA file
+ * @param name 	name of the FBA file
+ * @param loop	whether the action has to be played once, or it has to loop
+ *
+ * @return true if everithing is right, false if there's some issue reading the action file
+ */
+bool VirtualBasicAction::loadBasicAction(std::string path, std::string name, bool loop)
 {
-    if(character)
-        return TRUE;
-    else
-        return FALSE;
-}
-
-
-
-- (void)dealloc
-{
-    if(character)
-        delete character;
-    if(glViewer)
-        delete glViewer;
-
-    NaradaNotificationCenter::unsubscribeNotification(VirtualCharacter::naradaNotificationJustFinishedSpeaking, &modelHasFinishedSpeaking);
-    NaradaNotificationCenter::unsubscribeNotification(VirtualCharacter::naradaNotificationJustFinishedTemporaryAction, &modelHasFinishedTemporaryAction);
-    NaradaNotificationCenter::unsubscribeNotification(VirtualCharacter::naradaNotificationLoadingProgressPercentage, &modelLoadMonitoring);
-    
-    [super dealloc];
-}
-
-
-
-- (void) manageCover
-{
-    if (hideCounter == 10){
-		[[NSNotificationCenter defaultCenter] postNotificationName:notificationJustFinishedCoverProtectionTime object:nil];
-		hideCounter = -1;
-	}
-	else if (hideCounter >= 0)
-		hideCounter++;
-}
-
-
-//- (void) manageVideoRecording
-//{
-//    if ([self isModelLoaded]) {
-//		if ([self isExporting]) {
-//			hasStartedRecording = true;
-//			if (startSession) {				
-//				videoRecorder = [[NaradaVideoRecorder alloc] initWithOutPath:videoOnlyPath 
-//																	   width:[self width] 
-//																	  height:[self height] 
-//																videoBitRate:0 
-//																andFrameRate:[self getFrameRate]];
-//				[videoRecorder startSession];
-//				startSession = false;
-//				cout << "Coding Image " << endl;
-//                
-//				nFrames = [self getNFrames] + TIME_MARGIN * [self getFrameRate];
-//				cout << "N Frames: " << nFrames << endl;
-//                
-//                loadingPercentage = 0.0;
-//                [[NSNotificationCenter defaultCenter] postNotificationName:notificationModifiedLoadingBar object:nil];
-//			}
-//			else {
-//				[videoRecorder codeFrame];
-//				frame_count ++;
-//				loadingPercentage = 100.0 * frame_count / nFrames;
-//				[[NSNotificationCenter defaultCenter] postNotificationName:notificationModifiedLoadingBar object:nil];
-//			}
-//		}
-//		
-//		else if (hasStartedRecording) {
-//			//cout << "Frame:-" << frame_count << " ";
-//			if (margin_beats <= TIME_MARGIN * [self getFrameRate]) {
-//				margin_beats++;
-//				[videoRecorder codeFrame];
-//				frame_count ++;
-//				loadingPercentage = 100.0 * frame_count / nFrames;
-//				[[NSNotificationCenter defaultCenter] postNotificationName:notificationModifiedLoadingBar object:nil];
-//			}
-//			else hasStartedRecording = false;
-//		}
-//		else if (frame_count != 0) {
-//			[self restoreDefaultFrameRate];
-//			//cshell->rotateToInit();
-//			
-//			[videoRecorder EndSession];
-//			[videoRecorder release];
-//			frame_count = 0;
-//			margin_beats = 0;
-//			startSession = true;
-//			
-////PENDIENTE!!!!!!!!            
-////            if (cshell->getDoPitchShift()) {
-////                wavPath= [pathToDocuments stringByAppendingPathComponent:[NSString stringWithFormat:@"%@",_DEFAULT_HIGHPITCH_AUDIO_FILENAME]];
-////            } else{
-////                wavPath= [pathToDocuments stringByAppendingPathComponent:[NSString stringWithFormat:@"%@",_DEFAULT_NORMALPITCH_AUDIO_FILENAME]];
-////            }
-//			self.converter = [[[NaradaAudioConverter alloc] initWithSourcePath:wavPath 
-//                                                            andDestinationPath:aacPath 
-//                                                                 andSampleRate:0] retain];
-//			
-//			[converter convertWavtoAAC];
-//			
-//			[converter release];
-//			
-//			cout << "Video Only path: " << [videoOnlyPath cStringUsingEncoding:1] << endl;
-//			cout << "Video Mixed path: " << [videoMixedPath cStringUsingEncoding:1] << endl;
-//			
-//			self.mixer = [[[NaradaAVMixer alloc] initWithPathsInAudio:aacPath 
-//															  inVideo:videoOnlyPath 
-//														     outVideo:videoMixedPath 
-//														  andDelegate:self] retain];
-//            
-//			[mixer mixAudioVideo];
-//			
-//			[mixer release];
-//            
-//		}
-//        
-//	}
-//}
-
-
--(void)manageRecordingCounter
-{
-    //The notifications about recording label, are sent once a second
-    int frameRate = [self getFrameRate];
-    
-    if (recording_counter < 0) {
-		[[NSNotificationCenter defaultCenter] postNotificationName:notificationEmptyRecordingAudioLabel object:nil];
-	}
-    else if (recording_counter == 0) {
-		[[NSNotificationCenter defaultCenter] postNotificationName:notificationSetRecordingAudioLabel1 object:nil];
-	}
-	else if (recording_counter == frameRate) {
-        [[NSNotificationCenter defaultCenter] postNotificationName:notificationSetRecordingAudioLabel2 object:nil];
-	}
-	else if (recording_counter == frameRate * 2) {
-        [[NSNotificationCenter defaultCenter] postNotificationName:notificationSetRecordingAudioLabel3 object:nil];
-	}
-    
-    recording_counter++;
-    if(recording_counter == frameRate*3)
-        recording_counter = 0;
-}
-
-
-
-
-- (void)render
-{
-    if(changeBackground)
-    {
-        glViewer->changeBackgroundImage(self.changeBackgroundPath);
-        changeBackground = NO;
-    }
-
-    if (shouldDoTranslate)
-    {
-        shouldDoTranslate=NO;
-        if(shouldWaitToTranslate)
-        {
-            shouldWaitToTranslate=NO;
-            shouldDoTranslate=YES;
-        }else{
-            [self moveToSavedTranslation];
-        }
-    }
-    
-    std::vector<std::string>finishedActions = glViewer->updateScene();
-    
-    if(!finishedActions.empty())
-    {
-        std::cout << "finished action: " << finishedActions.at(0) << std::endl;
-        isPlayingRecorded = false;
-        [[NSNotificationCenter defaultCenter] postNotificationName:notificationFinishedSpeaking object:nil];
-    }
-    
-    [self manageAnimateTranslation];
-    
-    [self manageAnimateRotation];
-    
-    glViewer->RenderToScreen();
-    
-    [self checkFinishedSpeaking];
-	
-    [self manageRotAndPos];
-    
-//    std::cout << "width X height model: " << character->getModelWidth() << " X " << character->getModelHeight() << std::endl;
-//    std::cout << "center of the model: " << character->getCenter().x << " , " << character->getCenter().y << " , " << character->getCenter().z << std::endl;
-//    std::cout << "limits: " << character->getPerspectiveLimitInX() << " , " << character->getPerspectiveLimitInY() << std::endl;
-    
-//    if(isRecording)
-//    {
-//        if(my_recorder->hasExceededMaxSize())
-//            [[NSNotificationCenter defaultCenter] postNotificationName:notificationRecordingHasExceedSize object:nil];
-//    }
-    
-}
-
-
-- (void) resizeGLtoFitWidth:(int)thewidth andHeight:(int)theHeight
-{
-    self.width = thewidth;
-    self.height = theHeight;
-    glViewer->resizeGL(thewidth, theHeight);
-    
-}
-
-
-- (void)playAction:(NSString*) act
-{
-    character->playAction(string([act UTF8String]));
-}
-
-- (void)playTemporaryAction:(NSString*) act withPath:(NSString*) path andDelay:(long) delay
-{
-    if([[act pathExtension] isEqualToString:@"wav"]) {
-        act = [act stringByReplacingOccurrencesOfString:@".wav" withString:@".FBA"];
-    }
-    
-    character->playTemporaryAction(string([path UTF8String]), string([act UTF8String]), delay);
-}
-
-
-
-- (void)repeatAudio:(NSString*) act
-{
-    [self performSelectorOnMainThread:@selector(repeatOnMainThread:) withObject:[self getNSPathFromNSStringTo:act] waitUntilDone:NO];
-}
-
-
-
-- (void)repeatAudioWithAbsoluteAudioPath:(NSString*)wavFilePath temporary:(BOOL) temp
-{
-    [self performSelectorOnMainThread:@selector(repeatTemporaryOnMainThread:) withObject:wavFilePath waitUntilDone:NO];
-}
-
-
-
-- (void)repeatOnMainThread:(NSString*)wavFilePath
-{
-    if (!character->repeat(std::string([wavFilePath UTF8String]))) {
-        NSString* locdesc = NSLocalizedString(@"CONVERSION_ERROR", nil);
-        NSMutableDictionary *details = [NSMutableDictionary dictionary];
-        [details setValue:locdesc forKey:NSLocalizedDescriptionKey];
-        NSError * error = [NSError errorWithDomain:@"tts" code:404 userInfo:details];
-        
-        NSDictionary *userInfo = [NSDictionary dictionaryWithObject:error forKey:@"error"];
-        [[NSNotificationCenter defaultCenter] postNotificationName:notificationDidFailSpeaking object:nil userInfo:userInfo];
-    }
-}
-
-- (void)repeatTemporaryOnMainThread:(NSString*)wavFilePath
-{
-    if(!character->repeat(std::string([wavFilePath UTF8String]), true)) {
-        NSString* locdesc = NSLocalizedString(@"CONVERSION_ERROR", nil);
-        NSMutableDictionary *details = [NSMutableDictionary dictionary];
-        [details setValue:locdesc forKey:NSLocalizedDescriptionKey];
-        NSError * error = [NSError errorWithDomain:@"tts" code:404 userInfo:details];
-        
-        NSDictionary *userInfo = [NSDictionary dictionaryWithObject:error forKey:@"error"];
-        [[NSNotificationCenter defaultCenter] postNotificationName:notificationDidFailSpeaking object:nil userInfo:userInfo];
-    }
- }
-
-
-
-- (void)stopAction:(NSString *)actionName
-{
-    character->stopAction(string([actionName UTF8String]));
-}
-
-- (void)stopForegroundActions
-{
-    character->stopActions();
-}
-
-
-- (void)checkFinishedSpeaking
-{
-//    if(isPlayingRecorded)
-//    {
-//        if(character->justFinishedSpeaking())
-//        {
-//            isPlayingRecorded = false;
-//            [[NSNotificationCenter defaultCenter] postNotificationName:notificationFinishedSpeaking object:nil];
-//        }
-//    }
-}
-
-
-
--(BOOL)quitApplication
-{
-	glViewer->Close();
-	
-	if(glViewer)
-		delete glViewer;
-	
-	return TRUE;
-}
-
-
--(void)startHideCounter
-{
-    	hideCounter = 0;
-}
-
-
--(void)startTrackingRotAndPos
-{
-    isTrackingRotAndPos = TRUE;
-}
-
--(void)stopTrackingRotAndPos
-{
-    isTrackingRotAndPos = FALSE;   
-}
-
--(void)startPlayingTrackedRotAndPos
-{
-    isPlayingTrackedRotAndPos = TRUE;
-}
-
--(void)stopPlayingTrackedRotAndPos
-{
-    isPlayingTrackedRotAndPos = FALSE;  
-    trackingPosition = 0;
-    [[NSNotificationCenter defaultCenter] postNotificationName:notificationJustFinishedPlayingTrackedRotAndPos object:nil]  ;
-}
-
-- (bool)playRecMovie
-{
-    [self playAction:@"playRecMovie"];//ESTO HAY QUE REVISARLO
-    isExporting = true;
-    return true;
-}
-
-- (bool)playRecAudio
-{
-/*PLAY ANIMATION WITH RECORDED AUDIO*/
-//                if ([self getDoPitchShift]) {
-//                    cshell->playRecordedAudioInHighPitch();
-//                }else{
-//                    cshell->playRecordedAudio();
-//                }
-    [self playAction:@"welcome"];//ESTO HAY QUE REVISARLO
-    isPlayingRecorded = true;
-
-    return true;
-}
-
-- (void)shutUp
-{
-    character->shutUp();
-}
-
-
-
-#pragma mark -
-#pragma mark FrameRate functions
-
-- (float)getRealFrameRate
-{
-    return glViewer->getRealFrameRate();
-}
-
-- (int)getFrameRate
-{
-	return character->getFAPlayer()->getTimer()->getFrameRate();
-}
-
-
-- (int)getNFrames: (NSString*) str
-{
-//	return character->getNFramesFromAction(int([str UTF8String]));
-    return 0;
-}
-
-
-- (void) restoreDefaultFrameRate
-{
-	character->getFAPlayer()->getTimer()->setFrameRate(defaultFrameRate);
-	character->getFAPlayer()->setPlayMode(PLAYMODE_REALTIME);
-}
-
-
-
-
-
-#pragma mark -
-#pragma mark Background functions
-
-
-
--(void)changeBackgroundImageFromResource:(NSString*) imageFile
-{
-    changeBackgroundPath = imageFile;
-    changeBackground = YES;
-}
-
-
-
--(void)setDefaultBackground
-{
-    glViewer->setDefaultBackground();
-}
-
-
-
--(void)makeMovieFinishedWithError:(NSError *)error
-{
-	cout << "Make Movie finished, call the controller AviController..." << endl;
-        
-    //deberia hacer algo tipo
-    //[[NSNotificationCenter defaultCenter] postNotificationName:notificationMovieHasFinished object:nil];
-    
-    isExporting = false;
-	//[self setMenuState:MENU_INIT];
-}
-
-
-
-#pragma mark -
-#pragma mark Audio functions
-
--(void)setSpeakRealTime:(bool)realTime
-{
-    character->setSpeakRealTime(realTime);
-}
-
--(void)setDoPitchShift:(bool) shouldDo
-{
-//    if(my_recorder) my_recorder->setDoHigherPitch(shouldDo);
-    _shouldDoHigherPitch=shouldDo;
-}
-
-
--(void)getDoPitchShift
-{
-//    return my_recorder ?  my_recorder->getDoHigherPitch() : _shouldDoHigherPitch;
-}
-
-
-
-
-
-- (BOOL)calculateAudioDuration 
-{
-	NSString *mainPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0];
-	NSString *audioPath = [mainPath stringByAppendingPathComponent:_DEFAULT_NORMALPITCH_AUDIO_FILENAME];
-	
-	if (![[[NSFileManager alloc] init] fileExistsAtPath:audioPath]) {
-		cout << "Audio File 'test.wav' does not Exist" << endl;
+    fullPath = path + "/" + name;
+    std::cout << "full path to load basic action: " << fullPath << std::endl;
+
+    //check whether the file exists or not
+    FILE *fp;
+	if(!(fp = fopen(fullPath.c_str(),"r")))
 		return false;
+	fclose(fp);
+
+    // To extend FBA (lipsync) by constant amount
+    // This actually delays starting point of voice
+    
+    // longer strings: larger timeoffset?
+    // shorter strings: shorter timeoffset?
+    // should NOT set timeoffset to 0.
+    
+	actionPointer = character->getFAPlayer()->addTrack(const_cast<char*>(fullPath.c_str()), (loop?1:0), 0); // long string
+    stopBasicAction();
+
+    return true;
+}
+
+/**
+ *
+ * @brief adjusts the msDelay of action using the size of FBA file
+ */
+long VirtualBasicAction::adjustDelay(long msDelay)
+{
+    // If the FBA file originates from a TTS command
+    if (fullPath.find("speakTest") != std::string::npos) {
+        
+        // Open a file to calculate the size of it
+        std::ifstream file;
+        file.open (fullPath.c_str(), ios::binary );
+        file.seekg (0, ios::end);
+        
+        
+        return -(0.8 * file.tellg());
+    }
+    
+    return msDelay;
+}
+
+/**
+ *
+ * @brief plays the BasicAction, starting with the specified delay. If the action is being played,
+ * schedules the action, so it will be managed when the current action finished
+ *
+ * @param msDelay delay to start the action in ms
+ *
+ * @return true
+ */
+bool VirtualBasicAction::playBasicAction(long msDelay)
+{
+    msDelay = adjustDelay(msDelay);
+    
+	if(!playing)
+	{
+		character->getFAPlayer()->addTrack(actionPointer);
+		character->getFAPlayer()->play();
+		character->getFAPlayer()->update();//this updates the timer
+		long timeRef = character->getFAPlayer()->getTimer()->getCurrentTime();
+		actionPointer->start( timeRef + msDelay);
+		playing = true;
+
+	}else
+	{
+		long delayRef = character->getFAPlayer()->getTimer()->getCurrentTime() + msDelay;
+		scheduled.push_back(delayRef);
 	}
-	
-	NSURL *audioURL = [[NSURL alloc] initFileURLWithPath:audioPath];
-	AVURLAsset *audioAsset = [[AVURLAsset alloc ] initWithURL:audioURL options:nil];
-	
-	duration = CMTimeGetSeconds(audioAsset.duration);
-	
-	cout << "Duration of audio: " << duration << endl;
-	
+
+    return true;
+}
+
+
+
+/**
+ *
+ * @brief Stops the BasicAction. If there are scheduled actions, clears the schedule list.
+ *  Finally, it removes the track from the character player list.
+ *
+ * @return true
+ *
+ */
+bool VirtualBasicAction::stopBasicAction()
+{
+	actionPointer->stop();
+	if(!scheduled.size())
+		scheduled.clear();
+    std::cout << "stopBasicAction" << std::endl;
+
+	character->getFAPlayer()->removeTrack(actionPointer);
+	playing = false;
 	return true;
 }
 
 
 
-
-
-#pragma mark -
-#pragma mark Model Rotation and Motion
-
--(void)rotateToInit
-{
-    [self rotateModelX:kInitPitch y:kInitYaw absolute:true];
-}
-
--(void)rotateToTrackedPosition:(int)index
-{
-    float rotX = [self getTrackRotX: index];
-    float rotY = [self getTrackRotY: index];        
-
-    [self rotateModelX:rotX y:rotY absolute:true];
-}
-
--(void)translateToTrackedPosition:(int)index
-{
-    character->setTranslationX(transTrackX.at(index));
-}
-
-
-
--(void)trackRotation
+/**
+ *
+ * @brief removes the BasicAction FBA file. If there are scheduled actions, clears the schedule list.
+ *  It also removes the track from the character player list.
+ *
+ * @return true if file has been removed, false otherwise
+ *
+ */
+bool VirtualBasicAction::removeBasicActionFile()
 {
 
-    rotTrackX.push_back(character->getXRotation());
-    rotTrackY.push_back(character->getYRotation());
-}
-
--(void)trackTranslation
-{
-    transTrackX.push_back(character->getXTranslation());
-}
-
--(void)manageRotAndPos
-{
-    if (isTrackingRotAndPos)
+    if(remove(fullPath.c_str())!=0)
     {
-        //This way, only tracks rotation at recordingFrameRate
-        float aux = fmod(rotTrackFrameRateAdjust,(float)defaultFrameRate/recordingFrameRate);
-        if(aux<1)
-        {
-            [self trackRotation];
-            [self trackTranslation];
-            [self manageRecordingCounter];
-        }
-        rotTrackFrameRateAdjust++;
-        
-    }
-    
-    if (isPlayingTrackedRotAndPos)
-    {
-        int index = trackingPosition;
-        
-        if(isExporting)
-            index = int(trackingPosition * (float)defaultFrameRate/recordingFrameRate); 
-        
-        
-        if(index >= rotTrackX.size())
-        {
-            if(isExporting)
-                [self clearTrackingVectors];
-            
-            [self stopPlayingTrackedRotAndPos];
-        }
-        else
-        {      
-            [self rotateToTrackedPosition:index];
-            [self translateToTrackedPosition:index];
-            trackingPosition ++;
-        }
-    }
-}
-
--(void) clearTrackingVectors
-{
-    rotTrackX.clear();
-    rotTrackY.clear();
-    transTrackX.clear();
-}
-
-
-
-
--(float)getTrackRotX:(int) position
-{
-	return rotTrackX.at(position);	
-}
-
-
--(float)getTrackRotY:(int) position
-{
-	return rotTrackY.at(position);	
-}
-
--(float)getTrackTransX:(int) position
-{
-    return transTrackX.at(position);
-}
-
-
-- (void)moveModelX:(float)incX y:(float)incY absolute:(BOOL)abs
-{
-    [self moveModelX:incX absolute:abs];
-    [self moveModelY:incY absolute:abs];
-}
-
-- (void)moveModelX:(float)incX absolute:(BOOL)abs
-{
-    if(abs)
-        character->setNormalizedTranslationX(incX);
-    else
-        character->addNormalizedTranslationX(incX);
-}
-
-- (void)moveModelY:(float)incY absolute:(BOOL)abs
-{
-    if(abs)
-        character->setNormalizedTranslationY(incY);
-    else
-        character->addNormalizedTranslationY(incY);
-}
-
-
-- (void)rotateModelX:(float)incX y:(float)incY absolute:(BOOL)abs
-{
-        
-    if(incX != 0)
-    {
-        if(abs)
-            character->setXRotation(incX);
-        else
-            character->addXRotation(incX);
-
+    	std::cout << "cannot remove " << fullPath <<" file, created by lipsync" << std::endl;
+    	return false;
     }
 
-    if(incY != 0)
+	return true;
+}
+
+
+
+/**
+ *
+ * @brief Check whether the Basic Action has finished or not. In case the current Basic Action has finished
+ *  and there were scheduled more Basic Actions like this one, plays the next in the schedule list, inmediately if
+ *  there's no remaining delay, or delayed it has been scheduled with enough delay to wait after this one has finished.
+ *
+ * @return true if the Basic Action has finished and there are not scheduled actions like this one. False otherwise.
+ *
+ */
+bool VirtualBasicAction::checkFinished()
+{
+	bool ret = actionPointer->isFinished();
+	if(ret)
+	{
+		actionPointer->stop();
+		if(!scheduled.empty())
+		{
+			long timeRef = character->getFAPlayer()->getTimer()->getCurrentTime();
+			long delayRef = scheduled.at(0);
+			if((delayRef -timeRef) < 0)
+				actionPointer->start(character->getFAPlayer()->getTimer()->getCurrentTime());
+			else
+				actionPointer->start(character->getFAPlayer()->getTimer()->getCurrentTime() + (delayRef -timeRef));
+
+
+			character->getFAPlayer()->play();
+			scheduled.erase(scheduled.begin());
+			return false;
+		}
+		else
+		{
+			playing = false;
+		}
+
+	}
+	return ret;
+}
+
+
+
+/**
+ *
+ * @brief returns whether the Basic Action is being played right now or not
+ *
+ * @return true if it's being played at the moment, false otherwise.
+ *
+ * @see FbaFileAction::isBeingPlayed()
+ *
+ */
+bool VirtualBasicAction::isBeingPlayed()
+{
+	if(playing)
+		return actionPointer->isBeingPlayed();
+	else
+		return false;
+}
+
+
+
+
+
+
+///////////////////////////////////////
+///////////////////////////////////////
+////     CODE for VirtualAction    ////
+///////////////////////////////////////
+///////////////////////////////////////
+
+
+/**
+ *
+ * @brief Constructor: Creates a VirtualAction, initializes data members and loads all the Basic Actions associated
+ *  with this Virtual Action. It also associates the name of the VirtualAction regarding the one specified in the description.
+ *
+ * @param action animationData struct that contains the info about the kind of animation (bg/fg, loop and AnimKind) and the xml
+ *  description of the action (with its BasicActions)
+ * @param path path to the FBA file (it does not include the filename)
+ * @param vc VirtualCharacter that will be associated with this actions
+ *
+ * @throw NaradaException in case it find problems loading the actions
+ * @see loadActions(), findActionName()
+ */
+VirtualAction::VirtualAction(animationData* action, std::string path, VirtualCharacter* vc)
+{
+	srand ( time(NULL) );
+	character = vc;
+	playInLoop = action->loop;
+	playInBackground = action->background;
+	kind = action->kind;
+	findActionName(action->xmlDescription);
+	if(!loadActions(action->xmlDescription, path))
+		throw NaradaException("VirtualAction for " + name + " is empty!");
+	playing = false;
+	beingPlayed = false;
+
+}
+
+
+/**
+ *
+ * @brief Constructor: Creates a VirtualAction, from a single basic action, as a foreground action.
+ *
+ * @param path full path to the FBA file, (without file name)
+ * @param actionFileName the name of the action file
+ * @param vc VirtualCharacter that will be associated with this actions
+ * @param actName the name that will be assigned to the action. By default, uses actionFileName value
+ * @param loop whether the animation must be played in loop or not.  By default, uses false
+ * @param bg whether the animation must be played in bg or not.  By default, uses false
+ * @param actKind whether the animation is FACE animation, BODY animation, or BOTH.  By default, uses NONE
+ *
+ * @throw NaradaException in case it find problems loading the actions
+ * @see VirtualBasicAction::VirtualBasicAction()
+ */
+VirtualAction::VirtualAction(std::string path, std::string actionFileName, VirtualCharacter* vc, std::string actName, bool loop, bool bg, ActionKind actKind)
+{
+
+	if(actName.compare(""))
+		name = actName;
+	else
+		name = actionFileName;
+	character = vc;
+	playInLoop = loop;
+	playInBackground = bg;
+	kind = actKind;
+	playing = false;
+	beingPlayed = false;
+
+	try{
+		VirtualBasicAction* vba = new VirtualBasicAction(path, actionFileName, playInLoop, character);
+		implementations.push_back(vba);
+	}
+	catch(NaradaException& e)
+	{
+		e.debug();
+		throw NaradaException("VirtualAction for " + name + " is empty!");
+	}
+
+}
+
+
+
+/**
+ *
+ * @brief Destructor: clear the implementations vector
+ *
+ */
+VirtualAction::~VirtualAction()
+{
+    for(int i=0; i<implementations.size(); i++)
     {
-        if(abs)
-            character->setYRotation(incY);
-        else
-            character->addYRotation(incY);
+        VirtualBasicAction* actionToDelete = implementations.at(i);
+        delete actionToDelete;
     }
+	implementations.clear();
+}
+
+
+
+/**
+ *
+ * @brief Finds the name of the action inside its XML description
+ *
+ * @param xmlStr sting with the XML description of the action
+ *
+ * @return true if it finds the action name
+ */
+bool VirtualAction::findActionName(std::string xmlStr)
+{
+	size_t start = xmlStr.find("=") +1;
+	size_t end = xmlStr.find(">");
+	if(end>start)
+	{
+		name = xmlStr.substr(start,end-start);
+		std::cout << "action name: " << name << std::endl;
+		return true;
+	}
+	else
+		std::cout << "no action name found " << std::endl;
+
+	return false;
+
+}
+
+
+
+/**
+ *
+ * @brief parse the XML description of the action to find different implementations of the action (basicActions).
+ *  Each time a basicAction is found, its description is included as a new string in the vector that is returned at the end
+ *   of the process.
+ *
+ * @param xmlStr string with the XML description of the action
+ *
+ * @return a vector of strings. Each string contains the XML description a a basicAction
+ *
+ */
+std::vector<std::string> VirtualAction::parseBasicActions(std::string xmlStr)
+{
+	std::vector<std::string> result;
+	std::string spacedResult;
+	size_t start = 0;
+	size_t end = 0;
+
+	while(start!= std::string::npos)
+	{
+		start = xmlStr.find("<basicAction>", start);
+		end = xmlStr.find("</basicAction>", start);
+		if(start!= std::string::npos)
+		{
+			start += 13; //adds 13 that is size of <basicAction> text
+			spacedResult = xmlStr.substr(start, end-start);
+			//lets delete spaces
+			spacedResult.erase(remove_if(spacedResult.begin(), spacedResult.end(), ::isspace), spacedResult.end());
+			std::cout << "found basic action: " << spacedResult << std::endl;
+			result.push_back(spacedResult);
+			start = end;
+		}
+	}
+	return result;
+}
+
+
+
+/**
+ *
+ * @brief load all the basic actions associated with this action in its implementations vector
+ *
+ * @param xmlStr string with the XML description of the action
+ * @param actionsPath path to the folder where the action files are stored
+ *
+ * @return true if some basic action has been loaded, false otherwise
+ *
+ * @see parseBasicActions(), VirtualBasicAction::VirtualBasicAction()
+ *
+ */
+bool VirtualAction::loadActions(std::string xmlStr,  std::string actionsPath)
+{
+	VirtualBasicAction* vba;
+	std::vector<std::string> basicActions = parseBasicActions(xmlStr);
+
+	for(int i=0; i< basicActions.size(); i++)
+	{
+        NaradaNotificationCenter::postNotification(naradaNotificationLoadProgressReport);
+		try{
+			vba = new VirtualBasicAction(actionsPath, basicActions.at(i), playInLoop, character);
+		}catch(NaradaException& e){e.debug(); continue;}
+
+		implementations.push_back(vba);
+	}
+	if(!implementations.size())
+		return false;
+
+    NaradaNotificationCenter::postNotification(naradaNotificationLoadProgressReport);
+	return true;
+}
+
+
+
+/**
+ *
+ * @brief remove all the basic actions FILES associated with this action in its implementations vector
+ *
+ *
+ * @return true if all action files have been removed, false otherwise
+ *
+ * @see VirtualBasicAction::removeBasicActionFile()
+ *
+ */
+bool VirtualAction::removeActionFiles()
+{
+	bool ret = true;
+	for(int i=0; i< implementations.size(); i++)
+	{
+		if(!implementations.at(i)->removeBasicActionFile())
+			ret = false;
+	}
+
+	return ret;
+}
+
+
+
+/**
+ *
+ * @brief Plays a random implementation (basicAction) of this action, with a certain delay (0 by default).
+ *  It looks if the random implementation choosen is already in the schedule list or not, handles this issue, and
+ *  anycase, calls the function to play the basicAction choosen, with the desired delay.
+ *
+ * @param delay ms of delay from the moment this function is played, until the action must be played
+ * @return false if there are no implementations for this action, or if the action has no delay and it's already being played. True otherwise
+ *
+ * @see VirtualBasicAction::playBasicAction()
+ *
+ */
+bool VirtualAction::playAction(long delay)
+{
+	int implToSchedule = 0;
+
+	if(playing)
+	{
+		if(delay==0)
+		{
+			std::cout << "action: " << name << "is being played, cannot add same action with 0 delay" << std::endl;
+			return false;
+		}
+	}
+	if(implementations.size()==0)
+	{
+		std::cout << "no implementations found for action: " << name << std::endl;
+		return false;
+	}
+	else if (implementations.size()>1)
+		implToSchedule = rand() % implementations.size();
+
+
+	bool isInList=false;
+	for (int i=0; i<scheduledImplementation.size(); i++)
+	{
+		if(scheduledImplementation.at(i) == implToSchedule )
+			isInList = true;
+	}
     
-}
 
--(int)getXCenterModel
-{
-    return character->getXNormalizedTranslation();
-}
+	if(!isInList)
+		scheduledImplementation.push_back(implToSchedule);
+	std::cout << "scheduling action " << name << " with implem. " << implToSchedule << " delayed(ms): " << delay << std::endl;
+	implementations.at(implToSchedule)->playBasicAction(delay);
+	playing = true;
+	return true;
 
--(int)getYCenterModel
-{
-    return character->getYNormalizedTranslation();
-}
-
-
--(void)moveCloser:(float) incZ absolute:(BOOL)abs
-{
-    if(abs)
-        character->setTranslationZ(incZ);
-    else
-        character->addTranslationZ(incZ);
-}
-
-- (float)modelPositionX
-{
-    return character->getXNormalizedTranslation();
-}
-
-- (float)modelPositionY
-{
-    return character->getYNormalizedTranslation();
-}
-
-- (float)modelPositionZ
-{
-    return character->getZNormalizedTranslation();
-}
-
-
-- (void) animateTranslationDuring:(float)seconds incX:(float)x incY:(float)y absolute:(BOOL)abs
-{
-    if(animateTranslation)
-    {
-        NSLog(@"Cannot animate model translation: an translation is already being animated");
-        return;
-    }
-
-    
-    pendingFramesToAnimateTranslation = seconds * [self getFrameRate];
-    if(abs)
-    {
-        animateTranslationFinalX = x;
-        animateTranslationFinalY = y;
-        animateTranslationXStep = (animateTranslationFinalX - [self getXCenterModel])/pendingFramesToAnimateTranslation;
-        animateTranslationYStep = (animateTranslationFinalY - [self getYCenterModel])/pendingFramesToAnimateTranslation;
-    }
-    else
-    {
-        animateTranslationFinalX = [self getXCenterModel] + x;
-        animateTranslationFinalY = [self getYCenterModel] + y;
-        animateTranslationXStep = x / pendingFramesToAnimateTranslation;
-        animateTranslationYStep = y / pendingFramesToAnimateTranslation;
-    }
-    
-    animateTranslation = YES;
-    
-    std::cout << "SET UP ANIMATE TRANSLATION: to ( " << x << ", " << y << " ) abs: " << abs << std::endl;
-    std::cout << "model is at: ( " << [self getXCenterModel] << ", " << [self getYCenterModel] << " ) " << std::endl;
-    std::cout << "Final pos is: ( " << animateTranslationFinalX << ", " << animateTranslationFinalY << " )" <<std::endl;
-    std::cout << "pending frames to animate is: " << pendingFramesToAnimateTranslation << std::endl;
-    std::cout << "and steps are: (" << animateTranslationXStep << ", " << animateTranslationYStep << " )" << std::endl;
-    
-    
-    
-}
-
-- (void) animateRotationDuring:(float)seconds degreesX:(float)degX degreesY:(float)degY absolute:(BOOL)abs
-{
-    if(animateRotation)
-    {
-        NSLog(@"Cannot animate model translation: an translation is already being animated");
-        return;
-    }
-    
-    pendingFramesToAnimateRotation = seconds * [self getFrameRate];
-    if(abs)
-    {
-        animateRotationFinalDegreesX = degX;
-        animateRotationFinalDegreesY = degY;
-        animateRotationDegreesXStep = (animateRotationFinalDegreesX - character->getRotation().x)/pendingFramesToAnimateRotation;
-        animateRotationDegreesYStep = (animateRotationFinalDegreesY - character->getRotation().y)/pendingFramesToAnimateRotation;
-
-    }
-    else
-    {
-        animateRotationFinalDegreesX = character->getRotation().x + degX;
-        animateRotationFinalDegreesY = character->getRotation().y + degY;
-        animateRotationDegreesXStep = degX /pendingFramesToAnimateRotation;
-        animateRotationDegreesYStep = degY /pendingFramesToAnimateRotation;
-    }
-    
-    animateRotation = YES;
-    
-    std::cout << "SET UP ANIMATE ROTATION: to ( " << degX << ", " << degY << " ) abs: " << abs << std::endl;
-    std::cout << "model rot is: ( " << character->getRotation().x << ", " << character->getRotation().y << " ) " << std::endl;
-    std::cout << "Final rot is: ( " << animateRotationFinalDegreesX << ", " << animateRotationFinalDegreesY << " )" <<std::endl;
-    std::cout << "pending frames to animate is: " << pendingFramesToAnimateRotation << std::endl;
-    std::cout << "and steps are: (" << animateRotationDegreesXStep << ", " << animateRotationDegreesYStep << " )" << std::endl;
-}
-
-- (void) manageAnimateTranslation
-{
-    if (animateTranslation)
-    {
-        if(pendingFramesToAnimateTranslation > 0)
-        {
-            [self moveModelX:animateTranslationXStep y:animateTranslationYStep absolute:NO];
-            pendingFramesToAnimateTranslation--;
-        }
-        else
-        {
-            [self moveModelX:animateTranslationFinalX y:animateTranslationFinalY absolute:YES];
-            animateTranslation = NO;
-            NSLog(@"finished animating translation");
-            [[NSNotificationCenter defaultCenter] postNotificationName:notificationJustFinishedTranslationAnimation object:nil];
-        }
-    }
-}
-
-- (void) manageAnimateRotation
-{
-    if (animateRotation)
-    {
-        if(pendingFramesToAnimateRotation > 0)
-        {
-            [self rotateModelX:animateRotationDegreesXStep y:animateRotationDegreesYStep absolute:NO];
-            pendingFramesToAnimateRotation--;
-        }
-        else
-        {
-            [self rotateModelX:animateRotationFinalDegreesX y:animateRotationFinalDegreesY absolute:YES];
-            animateRotation = NO;
-            NSLog(@"finished animating rotation");
-            [[NSNotificationCenter defaultCenter] postNotificationName:notificationJustFinishedRotationAnimation object:nil];
-        }
-    }
 }
 
 
 
-#pragma mark -
-#pragma mark Path and Filename utilities
-
-
-
--(char*)getPathTo:(std::string) file
+/**
+ *
+ * @brief stops playing this action completely. All the scheduled implementations of this action are stoped and removed.
+ *
+ * @return true if the action is being played or is scheduled, false otherwise.
+ */
+bool VirtualAction::stopAction()
 {
-    NSString *fileString =	[NSString stringWithUTF8String:file.c_str()];
-	NSString *path = [ [ [NSBundle mainBundle] resourcePath ] stringByAppendingPathComponent:fileString ];
-    
-	return (char*)[path cStringUsingEncoding:1];
-}
+	if(playing)
+	{
+		playing = false;
+		while(!scheduledImplementation.empty())
+		{
+			implementations.at(scheduledImplementation.back())->stopBasicAction();
+			scheduledImplementation.pop_back();
+		}
+		std::cout << "Virtual action "<< name << " has been completely stopped" << std::endl;
 
+		return true;
+	}
 
--(char*)getPathFromNSStringTo:(NSString*) fileString
-{
-	NSString *path = [ [ [NSBundle mainBundle] resourcePath ] stringByAppendingPathComponent:fileString ];
-    
-	return (char*)[path cStringUsingEncoding:1];
-}
+	return false;
 
--(NSString*)getNSPathFromNSStringTo:(NSString*) fileString
-{
-	NSString *path = [ [ [NSBundle mainBundle] resourcePath ] stringByAppendingPathComponent:fileString ];
-    
-	return path;
-}
-
-- (NSString *)getPathToDocuments:(NSString *)fileString
-{
-	NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-	
-	return [ [paths objectAtIndex:0] stringByAppendingPathComponent:fileString ];
 }
 
 
 
--(char*) getWritablePathTo:(std::string) file
+/**
+ *
+ * @brief Check if the action has finished playing at all. If a scheduled implementation of this action has finished,
+ *  stops and deletes this implementation. In case there are no implementations being played or scheduled, it calls the stopAction
+ *  function.
+ *
+ * @return false if the action is not being played, or in case it's being played or scheduled. Returns true only once, in the moment
+ * that the action was being played and finishes completely, so there are not scheduled implementations.
+ *
+ * @see VirtualBasicAction::checkFinished(), VirtualBasicAction::isBeingPlayed(), stopAction()
+ *
+ */
+bool VirtualAction::checkFinished()
 {
-	NSString *fileString =	[NSString stringWithUTF8String:file.c_str()];
-	NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-	
-	NSString *path = [ [paths objectAtIndex:0] stringByAppendingPathComponent:fileString ];
-	
-	
-	NSFileManager *fileManager = [NSFileManager defaultManager];
-	[fileManager removeItemAtPath:path error:NULL];
-	
-	return (char*)[path cStringUsingEncoding:1];
-}	
+	beingPlayed = false;
 
+	if(playing)
+	{
+		bool finished = true;
+		int schedImplsize = scheduledImplementation.size();
 
+		for(int i =0; i< schedImplsize; i++)
+		{
+			if(!implementations.at(scheduledImplementation.at(i))->checkFinished())
+			{
+				if(implementations.at(scheduledImplementation.at(i))->isBeingPlayed())
+					beingPlayed = true;
 
--(char*) getWritablePathToReadFrom:(NSString*) fileString
-{
-//	NSString *fileString =	[NSString stringWithUTF8String:file.c_str()];
-	NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-	
-	NSString *path = [ [paths objectAtIndex:0] stringByAppendingPathComponent:fileString ];
-	
-	return (char*)[path cStringUsingEncoding:1];
+				finished = false;
+			}
+			else
+			{
+				std::cout << "sched action "<< name << " with implem. " << i << " has finished" << std::endl;
+				implementations.at(scheduledImplementation.at(i))->stopBasicAction();
+				scheduledImplementation.erase(scheduledImplementation.begin()+i);
+				schedImplsize--;
+				i--;
+			}
+		}
+
+		if(finished)
+		{
+			playing = false;
+			stopAction();
+		}
+		return finished;
+	}
+
+	return false;
 }
 
 
 
+/**
+ *
+ * @brief returns whether the action is being played (or scheduled to play), or not.
+ *
+ * @return true if the action is being played, or is scheduled. False otherwise.
+ *
+ */
+bool VirtualAction::isBeingPlayed()
+{
+	if(playing)
+	{
+		return beingPlayed;
+	}
+	return false;
+}
+
+} /* namespace VisageSDK */
 
 
-@end
+
+
+
+
