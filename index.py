@@ -5,7 +5,7 @@ import json
 from mysql.connector import errorcode
 
 USER = 'root'
-PWD = 'Jqz19941127.'
+PWD = ''
 HOST = '127.0.0.1'
 DB = 'EMMA'
 
