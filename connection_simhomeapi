@@ -1,0 +1,31 @@
+import urllib.request
+import json
+
+def get_connect():
+    try:
+        url = 'http://128.200.55.85/simhome/api/'
+        response = urllib.request.urlopen(url)
+        data = json.loads(response.read().decode(response.info().get_param('charset') or 'utf-8'))
+        #print(data)
+        return data
+    except urllib.error.URLError as e:
+        print(e.reason)
+
+
+
+def retrieve_data():
+    data = get_connect()
+    if data != -1:
+        print(data["Dev_List"][0])
+        for row in data:
+            DeviceID = row[0]
+            Name = row[1]
+            WeeklyUsage = row[2]
+            Watts = row[3]
+            Status = row[4]
+            data = {'Name': row[1], 'WeeklyUsage': row[2], 'Watts': row[3], 'Status': row[4]}
+
+
+
+
+retrieve_data()
